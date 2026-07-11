@@ -26,7 +26,7 @@ services:
       
       # [基础配置]
       - BASE_URL=http://localhost:8848    #你的基础url，用于直播流链接的拼接
-      - APP_AUTHOR_NAME=ThorNex      # 页面左上角显示的作者名
+      - APP_AUTHOR_NAME=晓猫窝      # 页面左上角显示的作者名
       - APP_BACK_WORDS=MUSIC PARTY    # 中间背景装饰文字
       
       # [平台凭证]
