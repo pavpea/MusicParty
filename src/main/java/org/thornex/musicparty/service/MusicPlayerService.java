@@ -681,6 +681,20 @@ public class MusicPlayerService {
         broadcastFullPlayerState();
     }
 
+    public void seekTo(long position, String sessionId) {
+        PlayableMusic music = currentMusic.get();
+        if (music == null) return;
+        if (isRateLimited(sessionId)) return;
+
+        long clampedPosition = Math.max(0, Math.min(position, music.duration()));
+        positionAnchor.set(clampedPosition);
+        timestampAnchor.set(System.currentTimeMillis());
+
+        log.info("Player seeked to {}ms by {}", clampedPosition, getUserName(sessionId));
+        broadcastFullPlayerState();
+        eventPublisher.publishEvent(new SystemMessageEvent(this, SystemMessageEvent.Level.INFO, PlayerAction.SEEK, getUserToken(sessionId), String.valueOf(clampedPosition)));
+    }
+
     public void togglePause(String sessionId) {
         if (currentMusic.get() == null) {
             if (!queueManager.getQueueSnapshot().isEmpty()) {

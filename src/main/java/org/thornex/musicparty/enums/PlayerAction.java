@@ -9,6 +9,7 @@ public enum PlayerAction {
     PAUSE,
     RESUME,
     SKIP,
+    SEEK,
 
     // 队列操作
     ADD,

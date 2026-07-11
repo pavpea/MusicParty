@@ -23,6 +23,10 @@ function handleGameEvent(event) {
         window.dispatchEvent(new CustomEvent('player:like', { detail: { userId: event.userId } }));
     }
 
+    if (event.action === 'SEEK') {
+        window.dispatchEvent(new CustomEvent('player:seek', { detail: { position: parseInt(event.payload), userId: event.userId } }));
+    }
+
     if (event.action === 'ADMIN_TRIGGER') {
         if (adminStore.adminPassword) {
             // Attempt auto-login
@@ -62,7 +66,7 @@ function handleGameEvent(event) {
 
     // 过滤掉用户进入/离开、以及歌曲开始播放的系统内部通知，避免弹窗干扰
     // 这些事件已经在 Chat Log 中展示，Toast 只展示关键交互
-    if (event.action === 'USER_JOIN' || event.action === 'USER_LEAVE' || event.action === 'PLAY_START') {
+    if (event.action === 'USER_JOIN' || event.action === 'USER_LEAVE' || event.action === 'PLAY_START' || event.action === 'SEEK') {
         return;
     }
 

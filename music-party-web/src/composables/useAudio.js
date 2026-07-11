@@ -168,10 +168,27 @@ export function useAudio(audioRef, playerStore) {
         }
     };
 
+    const handleSeekEvent = (e) => {
+        if (!audioRef.value) return;
+        const targetPos = e.detail.position;
+        const currentMs = audioRef.value.currentTime * 1000;
+        if (Math.abs(currentMs - targetPos) > 1000) {
+            console.log(`[Sync] Received SEEK event, seeking audio: ${currentMs}ms -> ${targetPos}ms`);
+            audioRef.value.currentTime = targetPos / 1000;
+            localProgress.value = targetPos;
+            
+            // 如果房间正处于播放状态，跳转后强制调用 play() 确保恢复发声
+            if (!playerStore.isPaused) {
+                safePlay();
+            }
+        }
+    };
+
     // === 5. 进度条同步 ===
     onMounted(() => {
         document.addEventListener('visibilitychange', handleVisibilityChange);
         window.addEventListener('online', handleNetworkChange);
+        window.addEventListener('player:seek', handleSeekEvent);
 
         syncTimer = setInterval(() => {
             if (!playerStore.nowPlaying) {
@@ -192,7 +209,7 @@ export function useAudio(audioRef, playerStore) {
             }
 
             // 3. 强行同步逻辑 (纠偏)
-            if (audioRef.value && !isBuffering.value && !isErrorState.value) {
+            if (audioRef.value && !isBuffering.value && !isErrorState.value && !playerStore.isSeeking) {
                 // 如果是暂停状态，强制对齐
                 if (playerStore.isPaused) {
                     // 避免重复赋值导致杂音
@@ -212,6 +229,12 @@ export function useAudio(audioRef, playerStore) {
                             audioRef.value.currentTime = targetTime / 1000;
                         }
                     }
+                    
+                    // 自动恢复播放 (如果本地由于切歌/跳转等原因被意外暂停，但后端认为仍在播放)
+                    if (audioRef.value.paused && audioRef.value.readyState >= 2) {
+                        console.log("[Sync] Audio was unexpectedly paused locally while playing globally, trying to resume...");
+                        safePlay();
+                    }
                 }
             }
         }, 200);
@@ -220,6 +243,7 @@ export function useAudio(audioRef, playerStore) {
     onUnmounted(() => {
         document.removeEventListener('visibilitychange', handleVisibilityChange);
         window.removeEventListener('online', handleNetworkChange);
+        window.removeEventListener('player:seek', handleSeekEvent);
         clearInterval(syncTimer);
         releaseWakeLock();
     });

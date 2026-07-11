@@ -31,6 +31,7 @@ export const usePlayerStore = defineStore('player', () => {
     const localProgress = ref(0);
     const isBuffering = ref(false);
     const isErrorState = ref(false);
+    const isSeeking = ref(false);
 
     // 投票切歌相关
     const isVoteSkipEnabled = ref(false);
@@ -177,6 +178,10 @@ export const usePlayerStore = defineStore('player', () => {
         // userStore.saveName(newName) removed; relying on backend sync
     };
 
+    const seekTo = (position) => {
+        if (requireAuth() && checkCooldown()) socketService.send(WS_DEST.PLAYER_SEEK, { position });
+    };
+
     const sendLike = () => {
         if (requireAuth()) socketService.send(WS_DEST.PLAYER_LIKE);
     };
@@ -201,10 +206,10 @@ export const usePlayerStore = defineStore('player', () => {
     return {
         nowPlaying, queue, isPaused, isShuffle, isFairShuffle, allowOfflineShuffle, config,
         isPauseLocked, isSkipLocked, isShuffleLocked, connected, isLoading, lyricText,
-        localProgress, isBuffering, isErrorState, streamListenerCount, streamActive,
+        localProgress, isBuffering, isErrorState, isSeeking, streamListenerCount, streamActive,
         isVoteSkipEnabled, voteSkipThreshold, voteSkipWaitTime, currentVotes, eligibleUsers,
         connect, tryReconnect, getCurrentProgress, syncState, // 导出 syncState
-        playNext, togglePause, toggleShuffle,
+        playNext, togglePause, toggleShuffle, seekTo,
         enqueue, enqueuePlaylist, topSong, removeSong,
         bindAccount, renameUser, sendChatMessage, sendLike
     };

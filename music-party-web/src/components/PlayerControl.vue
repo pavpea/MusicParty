@@ -51,12 +51,18 @@
       </div>
 
       <!-- 进度条 -->
-      <div class="h-1 bg-medical-200 w-full relative">
-
+      <div
+          ref="progressTrackRef"
+          class="h-2 -my-0.5 bg-medical-200 w-full relative cursor-pointer touch-none group/progress"
+          @mousedown="handleProgressMouseDown"
+          @mousemove="handleProgressMouseMove"
+          @touchstart="handleProgressTouchStart"
+          @mouseleave="hoverPercent = 0"
+      >
         <div
             v-for="(marker, index) in likeMarkers"
             :key="index"
-            class="absolute z-20 transition-all duration-300 transform -translate-y-1/2 top-1/2"
+            class="absolute z-20 transition-all duration-300 transform -translate-y-1/2 top-1/2 pointer-events-none"
             :style="{ left: (marker / (nowPlaying?.music.duration || 1)) * 100 + '%' }"
         >
           <Zap
@@ -66,13 +72,25 @@
         </div>
 
         <div
-            class="h-full transition-all duration-300 ease-linear relative"
+            class="h-full relative"
             :class="player.isErrorState ? 'bg-red-500' : 'bg-accent'"
             :style="{ width: progressPercent + '%' }"
         >
           <div
               v-if="!player.isErrorState"
-              class="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 rotate-45 transition-all duration-300 bg-accent"
+              class="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 rotate-45 transition-all duration-150 bg-accent opacity-0 group-hover/progress:opacity-100"
+              :class="{ '!opacity-100 scale-125': isDraggingProgress }"
+          ></div>
+        </div>
+
+        <!-- 悬浮预览 -->
+        <div
+            v-if="!isDraggingProgress"
+            class="absolute top-0 left-0 w-full h-full opacity-0 group-hover/progress:opacity-100 transition-opacity duration-150"
+        >
+          <div
+              class="absolute top-1/2 -translate-y-1/2 w-1 h-3 bg-white/60 rounded-sm pointer-events-none"
+              :style="{ left: hoverPercent + '%' }"
           ></div>
         </div>
       </div>
@@ -207,6 +225,8 @@ import { useToast } from '../composables/useToast';
 const player = usePlayerStore();
 const ui = useUiStore();
 const volumeTrackRef = ref(null);
+const progressTrackRef = ref(null);
+const isDraggingProgress = ref(false);
 const { info, error } = useToast();
 
 const nowPlaying = computed(() => player.nowPlaying);
@@ -251,6 +271,104 @@ const progressPercent = computed(() => {
   if (!nowPlaying.value || nowPlaying.value.music.duration === 0) return 0;
   return Math.min(100, (player.localProgress / nowPlaying.value.music.duration) * 100);
 });
+
+const hoverPercent = ref(0);
+
+// 进度条交互
+const getProgressFromEvent = (e) => {
+  if (!progressTrackRef.value || !nowPlaying.value) return 0;
+  const rect = progressTrackRef.value.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const ratio = Math.max(0, Math.min(1, x / rect.width));
+  return ratio;
+};
+
+const updateProgressByMouse = (e) => {
+  if (!nowPlaying.value) return;
+  const ratio = getProgressFromEvent(e);
+  const duration = nowPlaying.value.music.duration;
+  const pos = Math.round(ratio * duration);
+  player.localProgress = pos;
+  player.isSeeking = true;
+};
+
+const handleProgressMouseDown = (e) => {
+  if (!nowPlaying.value || player.isErrorState) return;
+  isDraggingProgress.value = true;
+  player.isSeeking = true;
+  updateProgressByMouse(e);
+  window.addEventListener('mousemove', handleProgressMouseMove);
+  window.addEventListener('mouseup', handleProgressMouseUp);
+};
+
+const handleProgressMouseMove = (e) => {
+  if (!isDraggingProgress.value) {
+    // hover over progress bar
+    hoverPercent.value = getProgressFromEvent(e) * 100;
+    return;
+  }
+  updateProgressByMouse(e);
+};
+
+const handleProgressMouseUp = (e) => {
+  if (isDraggingProgress.value) {
+    const ratio = getProgressFromEvent(e);
+    const duration = nowPlaying.value.music.duration;
+    const pos = Math.round(ratio * duration);
+    player.seekTo(pos);
+  }
+  isDraggingProgress.value = false;
+  player.isSeeking = false;
+  window.removeEventListener('mousemove', handleProgressMouseMove);
+  window.removeEventListener('mouseup', handleProgressMouseUp);
+};
+
+// 触屏进度条交互
+const getProgressFromTouchEvent = (e) => {
+  if (!progressTrackRef.value || !nowPlaying.value) return 0;
+  const rect = progressTrackRef.value.getBoundingClientRect();
+  const touch = e.touches[0] || e.changedTouches[0];
+  const x = touch.clientX - rect.left;
+  const ratio = Math.max(0, Math.min(1, x / rect.width));
+  return ratio;
+};
+
+const updateProgressByTouch = (e) => {
+  if (!nowPlaying.value) return;
+  const ratio = getProgressFromTouchEvent(e);
+  const duration = nowPlaying.value.music.duration;
+  const pos = Math.round(ratio * duration);
+  player.localProgress = pos;
+  player.isSeeking = true;
+};
+
+const handleProgressTouchStart = (e) => {
+  if (!nowPlaying.value || player.isErrorState) return;
+  isDraggingProgress.value = true;
+  player.isSeeking = true;
+  updateProgressByTouch(e);
+  window.addEventListener('touchmove', handleProgressTouchMove, { passive: false });
+  window.addEventListener('touchend', handleProgressTouchEnd);
+};
+
+const handleProgressTouchMove = (e) => {
+  if (!isDraggingProgress.value) return;
+  e.preventDefault(); // 阻止手机浏览器滚动/切页默认行为
+  updateProgressByTouch(e);
+};
+
+const handleProgressTouchEnd = (e) => {
+  if (isDraggingProgress.value) {
+    const ratio = getProgressFromTouchEvent(e);
+    const duration = nowPlaying.value.music.duration;
+    const pos = Math.round(ratio * duration);
+    player.seekTo(pos);
+  }
+  isDraggingProgress.value = false;
+  player.isSeeking = false;
+  window.removeEventListener('touchmove', handleProgressTouchMove);
+  window.removeEventListener('touchend', handleProgressTouchEnd);
+};
 
 // --- 音量逻辑 ---
 const lastVolume = ref(0.5);
@@ -321,5 +439,7 @@ const openSourcePage = () => {
 onUnmounted(() => {
   window.removeEventListener('mousemove', handleVolumeMouseMove);
   window.removeEventListener('mouseup', handleVolumeMouseUp);
+  window.removeEventListener('mousemove', handleProgressMouseMove);
+  window.removeEventListener('mouseup', handleProgressMouseUp);
 });
 </script>

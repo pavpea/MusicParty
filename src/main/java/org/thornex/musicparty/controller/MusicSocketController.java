@@ -79,6 +79,12 @@ public class MusicSocketController {
         musicPlayerService.removeSongFromQueue(request.queueId(), sessionId);
     }
 
+    @MessageMapping("/control/seek")
+    public void seekTo(@Payload SeekRequest request, @Header("simpSessionId") String sessionId) {
+        if (isGuest(sessionId)) return;
+        musicPlayerService.seekTo(request.position(), sessionId);
+    }
+
     // 点赞接口
     @MessageMapping("/control/like")
     public void likeSong(@Header("simpSessionId") String sessionId) {
