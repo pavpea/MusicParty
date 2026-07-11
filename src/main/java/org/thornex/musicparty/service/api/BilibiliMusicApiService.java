@@ -55,6 +55,10 @@ public class BilibiliMusicApiService implements IMusicApiService {
         log.info("Bilibili API Service SESSDATA updated.");
     }
 
+    public String getSessdata() {
+        return sessdata != null ? sessdata : "";
+    }
+
     @Override
     public String getPlatformName() {
         return PLATFORM;

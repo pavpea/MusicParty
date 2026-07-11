@@ -1,8 +1,8 @@
 package org.thornex.musicparty.dto;
 
 public record AdminConfigUpdateRequest(
-    Integer maxSize,
-    Integer historySize,
+    Integer maxQueueSize,
+    Integer maxHistorySize,
     Integer maxUserSongs,
     Integer maxPlaylistImportSize,
     Integer maxChatHistorySize,

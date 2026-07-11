@@ -7,6 +7,7 @@ import org.thornex.musicparty.config.AppProperties;
 import org.thornex.musicparty.dto.*;
 import org.thornex.musicparty.service.ChatService;
 import org.thornex.musicparty.service.MusicPlayerService;
+import org.thornex.musicparty.service.ConfigPersistenceService;
 import org.thornex.musicparty.service.api.BilibiliMusicApiService;
 import org.thornex.musicparty.service.api.NeteaseMusicApiService;
 import org.thornex.musicparty.service.stream.LiveStreamService;
@@ -24,8 +25,18 @@ public class AdminController {
     private final NeteaseMusicApiService neteaseMusicApiService;
     private final BilibiliMusicApiService bilibiliMusicApiService;
     private final LiveStreamService liveStreamService;
+    private final ConfigPersistenceService configPersistenceService;
 
-    public AdminController(MusicPlayerService musicPlayerService, ChatService chatService, AppProperties appProperties, AuthController authController, NeteaseMusicApiService neteaseMusicApiService, BilibiliMusicApiService bilibiliMusicApiService, LiveStreamService liveStreamService) {
+    public AdminController(
+            MusicPlayerService musicPlayerService, 
+            ChatService chatService, 
+            AppProperties appProperties, 
+            AuthController authController, 
+            NeteaseMusicApiService neteaseMusicApiService, 
+            BilibiliMusicApiService bilibiliMusicApiService, 
+            LiveStreamService liveStreamService,
+            ConfigPersistenceService configPersistenceService
+    ) {
         this.musicPlayerService = musicPlayerService;
         this.chatService = chatService;
         this.adminPassword = appProperties.getAdminPassword();
@@ -33,6 +44,7 @@ public class AdminController {
         this.neteaseMusicApiService = neteaseMusicApiService;
         this.bilibiliMusicApiService = bilibiliMusicApiService;
         this.liveStreamService = liveStreamService;
+        this.configPersistenceService = configPersistenceService;
     }
 
     private boolean isValid(String password) {
@@ -52,9 +64,10 @@ public class AdminController {
         if (!isValid(password)) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         
         String type = request.type().toUpperCase();
+        String msg;
         if ("ALL".equalsIgnoreCase(type)) {
             musicPlayerService.setAllLocks(request.locked());
-            return ResponseEntity.ok(Map.of("message", (request.locked() ? "已开启全频道操作锁定" : "已解除全频道操作锁定")));
+            msg = request.locked() ? "已开启全频道操作锁定" : "已解除全频道操作锁定";
         } else {
             musicPlayerService.setLock(type, request.locked());
             String desc = switch (type) {
@@ -63,8 +76,11 @@ public class AdminController {
                 case "SHUFFLE" -> "随机控制";
                 default -> type;
             };
-            return ResponseEntity.ok(Map.of("message", desc + (request.locked() ? "已锁定" : "已解锁")));
+            msg = desc + (request.locked() ? "已锁定" : "已解锁");
         }
+        
+        configPersistenceService.saveConfig();
+        return ResponseEntity.ok(Map.of("message", msg));
     }
 
     @PostMapping("/player/action")
@@ -107,6 +123,8 @@ public class AdminController {
         String newPwd = request.password() == null ? "" : request.password();
         authController.forceSetPassword(newPwd);
         musicPlayerService.broadcastPasswordChanged();
+        
+        configPersistenceService.saveConfig();
         return ResponseEntity.ok(Map.of("message", newPwd.isEmpty() ? "房间已设为公开访问" : "房间访问密码已更新"));
     }
 
@@ -141,9 +159,11 @@ public class AdminController {
 
         if ("netease".equalsIgnoreCase(request.platform())) {
             neteaseMusicApiService.updateCookie(request.value());
+            configPersistenceService.saveConfig();
             return ResponseEntity.ok(Map.of("message", "网易云音乐凭据已更新"));
         } else if ("bilibili".equalsIgnoreCase(request.platform())) {
             bilibiliMusicApiService.updateSessdata(request.value());
+            configPersistenceService.saveConfig();
             return ResponseEntity.ok(Map.of("message", "Bilibili SessData 已更新"));
         } else {
             return ResponseEntity.badRequest().build();
@@ -156,6 +176,8 @@ public class AdminController {
 
         liveStreamService.setEnabled(request.enabled());
         musicPlayerService.broadcastFullPlayerState();
+        
+        configPersistenceService.saveConfig();
         return ResponseEntity.ok(Map.of("message", request.enabled() ? "直播流同步服务已启动" : "直播流同步服务已停止"));
     }
 
@@ -164,6 +186,8 @@ public class AdminController {
         if (!isValid(password)) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
 
         musicPlayerService.updateConfig(request);
+        
+        configPersistenceService.saveConfig();
         return ResponseEntity.ok(Map.of("message", "系统配置已刷新"));
     }
 
@@ -174,7 +198,6 @@ public class AdminController {
         if (!isValid(request.password())) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "ACCESS DENIED"));
         }
-        // ... (original implementation if still needed, but I'll remove it since we are refactoring)
         return ResponseEntity.status(HttpStatus.GONE).body(Map.of("message", "This endpoint is deprecated. Use structured endpoints."));
     }
 }

@@ -76,7 +76,7 @@ public class NeteaseMusicApiService implements IMusicApiService {
     }
 
     // UPDATED: Renamed method and removed encoding.
-    private String getCookie() {
+    public String getCookie() {
         return currentCookie != null ? currentCookie : "";
     }
     

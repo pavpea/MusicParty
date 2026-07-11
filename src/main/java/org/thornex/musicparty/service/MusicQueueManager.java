@@ -30,6 +30,12 @@ public class MusicQueueManager {
 
     // --- Public API for Queue Manipulation ---
 
+    public synchronized void reEnqueueAtFront(MusicQueueItem item) {
+        if (item != null) {
+            queue.addFirst(item);
+        }
+    }
+
     /**
      * 向队列末尾添加一首歌曲
      */

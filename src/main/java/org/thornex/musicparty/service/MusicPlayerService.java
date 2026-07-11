@@ -199,15 +199,28 @@ public class MusicPlayerService {
                                 }
                             },
                             error -> {
-                        log.error("Play failed for {}: {}", nextItem.music().name(), error.getMessage());
-                        eventPublisher.publishEvent(new SystemMessageEvent(this, SystemMessageEvent.Level.ERROR, PlayerAction.ERROR_LOAD, "SYSTEM", nextItem.music().name()));
-                        isLoading.set(false);
-                        broadcastFullPlayerState();
-                        playNextInQueue();
-                    });
+                                log.error("Play failed for {}: {}", nextItem.music().name(), error.getMessage());
+                                eventPublisher.publishEvent(new SystemMessageEvent(this, SystemMessageEvent.Level.ERROR, PlayerAction.ERROR_LOAD, "SYSTEM", nextItem.music().name()));
+                                isLoading.set(false);
+                                
+                                if (isConnectionError(error)) {
+                                    log.warn("API connection error detected. Pausing player to prevent playlist drain.");
+                                    isPaused.set(true);
+                                    queueManager.reEnqueueAtFront(nextItem);
+                                } else {
+                                    // 仅在非连接错误时（如版权、切歌）才尝试播放下一首
+                                    playNextInQueue();
+                                }
+                                broadcastFullPlayerState();
+                            });
         } catch (Exception e) {
             log.error("Unexpected error in playNextInQueue", e);
             isLoading.set(false);
+            if (isConnectionError(e)) {
+                log.warn("API connection or config error caught synchronously. Pausing player to prevent playlist drain.");
+                isPaused.set(true);
+                queueManager.reEnqueueAtFront(nextItem);
+            }
             broadcastFullPlayerState();
         }
     }
@@ -621,13 +634,13 @@ public class MusicPlayerService {
     public void updateConfig(AdminConfigUpdateRequest request) {
         StringBuilder logMsg = new StringBuilder("System configuration updated: ");
         
-        if (request.maxSize() != null) {
-            appProperties.getQueue().setMaxSize(request.maxSize());
-            logMsg.append("MaxQueueSize=").append(request.maxSize()).append(" ");
+        if (request.maxQueueSize() != null) {
+            appProperties.getQueue().setMaxSize(request.maxQueueSize());
+            logMsg.append("MaxQueueSize=").append(request.maxQueueSize()).append(" ");
         }
-        if (request.historySize() != null) {
-            appProperties.getQueue().setHistorySize(request.historySize());
-            logMsg.append("HistorySize=").append(request.historySize()).append(" ");
+        if (request.maxHistorySize() != null) {
+            appProperties.getQueue().setHistorySize(request.maxHistorySize());
+            logMsg.append("HistorySize=").append(request.maxHistorySize()).append(" ");
         }
         if (request.maxUserSongs() != null) {
             appProperties.getQueue().setMaxUserSongs(request.maxUserSongs());
@@ -965,5 +978,30 @@ public class MusicPlayerService {
 
     private String getUserName(String sessionId) {
         return userService.getUser(sessionId).map(User::getName).orElse("Unknown User");
+    }
+
+    private boolean isConnectionError(Throwable error) {
+        if (error == null) return false;
+        String msg = error.getMessage();
+        if (msg != null) {
+            String lower = msg.toLowerCase();
+            if (lower.contains("connection refused") || 
+                lower.contains("connectexception") || 
+                lower.contains("timeout") || 
+                lower.contains("unknownhostexception") || 
+                lower.contains("unresolved address") ||
+                lower.contains("finishconnect") ||
+                lower.contains("webclientrequestexception") ||
+                lower.contains("尚未配置") ||
+                lower.contains("cookie") ||
+                lower.contains("sessdata")) {
+                return true;
+            }
+        }
+        Throwable cause = error.getCause();
+        if (cause != null && cause != error) {
+            return isConnectionError(cause);
+        }
+        return false;
     }
 }
